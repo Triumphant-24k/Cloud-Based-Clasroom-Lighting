@@ -17,4 +17,14 @@ def load_config():
             raise ValueError('Polygons need at least three normalized points')
     if min(settings['zone_on_delay'], settings['zone_off_delay'], settings['light_wattage']) < 0:
         raise ValueError('Delays and wattage must be nonnegative')
+    if settings['process_every_n_frames'] < 1 or settings['tick_seconds'] <= 0:
+        raise ValueError('Frame sampling and tick interval must be positive')
+    if not 0 <= settings['confidence_threshold'] <= 1:
+        raise ValueError('Confidence must be 0–1')
+    if settings['assignment_method'] not in ('foot_point', 'overlap'):
+        raise ValueError('Unknown assignment method')
+    if settings['moderate_threshold'] >= settings['bright_threshold']:
+        raise ValueError('Daylight thresholds must be ordered')
+    if any(not 0 <= settings[key] <= 100 for key in ('bright_brightness','moderate_brightness','dark_brightness')):
+        raise ValueError('Brightness must be 0–100')
     return settings, zones, mapping

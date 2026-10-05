@@ -39,6 +39,7 @@ class Engine:
         self.frame = np.zeros((540,960,3),np.uint8)
         self.state, self.jpeg, self.counter = {}, b'', 0
         self.last_save, self.last_device, self.last_cloud = 0, '', ''
+        self.last_telemetry_log = 0
         self.log('System ready · anonymous zone occupancy only')
 
     def log(self, message):
@@ -85,6 +86,10 @@ class Engine:
             if occupied[z]!=previous[z]: self.log(f'{z} '+('occupied' if occupied[z] else 'empty'))
         metadata={'classroomId':self.config['classroom_id'],'timestamp':datetime.now(timezone.utc).isoformat(),'peopleDetected':len(self.boxes),'occupiedZones':occupied,'ambientLight':self.ambient,'systemMode':self.lighting.mode}
         cloud_lights=await self.cloud.decision(metadata)
+        if start-self.last_telemetry_log>=10:
+            self.log('Telemetry sent to simulated cloud' if self.cloud.status=='SIMULATED CLOUD' else 'Telemetry sent to cloud' if self.cloud.status=='CLOUD CONNECTED' else 'Local fallback decision received')
+            if 'OFFLINE' not in self.cloud.status: self.log('Cloud decision received')
+            self.last_telemetry_log=start
         lights=self.lighting.manual.copy() if self.lighting.mode=='MANUAL' else cloud_lights
         if self.last_cloud != self.cloud.status:
             self.log(self.cloud.status)
@@ -103,7 +108,7 @@ class Engine:
         if device!=self.last_device:
             self.log(device); self.last_device=device
         elapsed=max(.001,time.monotonic()-start)
-        self.state={**metadata,'occupiedZoneCount':sum(occupied.values()),'occupancyPercentage':sum(occupied.values())/6*100,'lights':lights,'energy':self.energy.update(lights,start),'cloudStatus':self.cloud.status,'esp32Status':device,'cameraStatus':('RUNNING' if self.running else 'PAUSED')+' · '+self.mode,'sourceMode':self.mode,'detectionRunning':self.running,'cvFPS':min(1/self.config['tick_seconds'],1/elapsed) if self.running else 0,'inferenceLatency':self.latency,'zones':self.zones,'mapping':self.mapping,'logs':list(self.logs)}
+        self.state={**metadata,'occupiedZoneCount':sum(occupied.values()),'occupancyPercentage':sum(occupied.values())/6*100,'lights':lights,'energy':self.energy.update(lights,start),'cloudStatus':self.cloud.status,'cloudMode':self.config['cloud_mode'],'esp32Mode':self.config['esp32_mode'],'esp32Status':device,'cameraStatus':('RUNNING' if self.running else 'PAUSED')+' · '+self.mode,'sourceMode':self.mode,'detectionRunning':self.running,'cvFPS':min(1/self.config['tick_seconds'],1/elapsed) if self.running else 0,'inferenceLatency':self.latency,'zones':self.zones,'mapping':self.mapping,'logs':list(self.logs)}
         overlay=self.frame.copy()
         for z,p in self.zones.items():
             poly=np.array([[x*w,y*h] for x,y in p],np.int32)
