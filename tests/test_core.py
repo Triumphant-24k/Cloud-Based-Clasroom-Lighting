@@ -57,3 +57,33 @@ def test_energy():
  e=EnergyTracker(40);out=e.update({'LIGHT_1':50},0)
  assert out['baselinePower']==240;assert out['smartPower']==20;assert out['powerSaved']==220
  assert e.update({},3600)['cumulativeEnergySavedWh']==220
+
+def test_cloud_validates_command(monkeypatch):
+ import httpx
+ import backend.services.cloud as cloud_module
+ monkeypatch.setenv('AZURE_FUNCTION_URL','https://example.test/lighting')
+ monkeypatch.delenv('AZURE_IOT_DEVICE_CONNECTION_STRING',raising=False)
+ original=httpx.AsyncClient
+ async def handler(request):
+  return httpx.Response(200,json={'lights':{'LIGHT_1':999}})
+ monkeypatch.setattr(cloud_module.httpx,'AsyncClient',lambda **kwargs:original(transport=httpx.MockTransport(handler)))
+ c,z,m=load_config();c['cloud_mode']='CLOUD_CONNECTED';cloud=CloudService(c,m)
+ result=asyncio.run(cloud.decision({'occupiedZones':{'FRONT_LEFT':True},'ambientLight':450}))
+ assert result['LIGHT_1']==60 and 'FALLBACK' in cloud.status
+
+def test_cloud_connected_metadata_only(monkeypatch):
+ import httpx
+ import backend.services.cloud as cloud_module
+ monkeypatch.setenv('AZURE_FUNCTION_URL','https://example.test/lighting')
+ monkeypatch.delenv('AZURE_IOT_DEVICE_CONNECTION_STRING',raising=False)
+ original=httpx.AsyncClient
+ c,z,m=load_config();c['cloud_mode']='CLOUD_CONNECTED'
+ async def handler(request):
+  import json
+  payload=json.loads(request.content)
+  assert 'frame' not in payload and 'occupiedZones' in payload
+  return httpx.Response(200,json={'lights':dict.fromkeys(m.values(),30)})
+ monkeypatch.setattr(cloud_module.httpx,'AsyncClient',lambda **kwargs:original(transport=httpx.MockTransport(handler)))
+ cloud=CloudService(c,m)
+ assert asyncio.run(cloud.decision({'occupiedZones':dict.fromkeys(ZONES,True),'ambientLight':850}))['LIGHT_6']==30
+ assert cloud.status=='CLOUD CONNECTED'

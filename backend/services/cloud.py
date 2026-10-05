@@ -1,5 +1,6 @@
 import os
 import json
+import asyncio
 import httpx
 from .lighting import decide
 
@@ -21,8 +22,8 @@ class CloudService:
                     from azure.iot.device.aio import IoTHubDeviceClient
                     if self.client is None:
                         self.client = IoTHubDeviceClient.create_from_connection_string(connection)
-                        await self.client.connect()
-                    await self.client.send_message(json.dumps(metadata))
+                        await asyncio.wait_for(self.client.connect(), timeout=3)
+                    await asyncio.wait_for(self.client.send_message(json.dumps(metadata)), timeout=3)
                 async with httpx.AsyncClient(timeout=3) as client:
                     response = await client.post(url, json=metadata, headers={'x-functions-key':os.getenv('AZURE_FUNCTION_KEY','')})
                     response.raise_for_status()

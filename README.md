@@ -22,6 +22,8 @@ npm run dev
 
 Open http://localhost:5173. API documentation: http://127.0.0.1:8000/docs. pnpm can substitute for npm. Linux/macOS: use `python3 -m venv .venv` and `.venv/bin/python`.
 
+After installing dependencies, `./start-demo.ps1` launches both services in hidden windows and writes logs under `data/`. Do not run it while ports 8000 and 5173 are already in use. For unreliable networks, upgrade pip and use `pip install -r requirements.txt --timeout 120 --retries 8` to enable resumable large downloads.
+
 The default SIMULATION + LOCAL_DEMO + ESP32_SIMULATED setup needs no camera or Azure account. Click scenarios and wait one second for zone ON; empty zones switch OFF after five seconds. Switch lighting to MANUAL for independent sliders, then AUTO to recalculate immediately.
 
 Upload JPG/PNG or MP4/AVI/MOV/MKV for real YOLO detection. The first detection downloads `yolov8n.pt`; internet is required once, or put pretrained weights in the repository and change `yolo_model`. Start Camera uses configured `camera_id`. Raw video remains local. Uploads and history are ignored by Git. Only the device connection string, function URL/key, and ESP32 URL belong in `.env` (copy `.env.example`). Never commit secrets.
