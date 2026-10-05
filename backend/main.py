@@ -40,6 +40,7 @@ class Engine:
         self.state, self.jpeg, self.counter = {}, b'', 0
         self.last_save, self.last_device, self.last_cloud = 0, '', ''
         self.last_telemetry_log = 0
+        self.last_people = -1
         self.log('System ready · anonymous zone occupancy only')
 
     def log(self, message):
@@ -80,6 +81,9 @@ class Engine:
                     self.counter+=1
         h,w=self.frame.shape[:2]
         raw=assign_people(self.boxes,self.zones,w,h,self.config['assignment_method'],self.config['overlap_threshold'])
+        if len(self.boxes)!=self.last_people:
+            self.log(f'Person detection count: {len(self.boxes)}')
+            self.last_people=len(self.boxes)
         previous=self.smoother.state.copy()
         occupied=self.smoother.update(raw,start) if self.running else previous
         for z in ZONES:
