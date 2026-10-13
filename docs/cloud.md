@@ -21,7 +21,7 @@ flowchart TD
  Bridge --> Dashboard[Local React dashboard + SQLite history]
 ```
 
-The Function URL requires AWS_IAM authentication; requests are signed with SigV4 using boto3's credential provider chain. Use an AWS IAM Identity Center profile or other temporary role credentials. Never put AWS credentials in the React bundle. The Lambda execution role can publish only the two topics for its configured classroom, write only its history table, discover the IoT data endpoint, and write logs. The laptop role only needs the stack's invocation policy.
+The Function URL requires AWS_IAM authentication; requests are signed with SigV4 using boto3's credential provider chain. Use the `zonelight` AWS login profile for the new AWS experience, or another temporary role credential provider. Never put AWS credentials in the React bundle. The Lambda execution role can publish only the two topics for its configured classroom, write only its history table, discover the IoT data endpoint, and write logs. The laptop role only needs the stack's invocation policy.
 
 ## Deploy your stack
 
@@ -30,13 +30,12 @@ Install the official AWS CLI v2 and AWS SAM CLI. Deployment creates billable res
 From the repository root:
 
 ```powershell
-aws configure sso --profile zonelight
-aws sso login --profile zonelight
+aws login --profile zonelight --region ap-southeast-2
 aws sts get-caller-identity --profile zonelight
 .\.venv\Scripts\python.exe -m tools.prepare_aws
-sam validate --lint --template-file cloud/template.yaml --region ap-south-1
+sam validate --lint --template-file cloud/template.yaml --region ap-southeast-2
 sam build --template-file cloud/template.yaml
-sam deploy --guided --profile zonelight --region ap-south-1
+sam deploy --guided --profile zonelight --region ap-southeast-2
 ```
 
 Choose a stack name such as `zonelight-classroom`. Set ClassroomId to the exact `classroom_id` from config/system_config.json (default CLASSROOM-01). Acknowledge IAM resource creation during your deployment. SAM packages only cloud/; it does not upload camera footage, local uploads, CV weights or the virtual environment. Run prepare_aws and redeploy whenever lighting thresholds or mapping change. The backend rejects cloud commands that disagree with local settings and falls back safely.
@@ -44,7 +43,7 @@ Choose a stack name such as `zonelight-classroom`. Set ClassroomId to the exact 
 Retrieve outputs:
 
 ```powershell
-aws cloudformation describe-stacks --stack-name zonelight-classroom --profile zonelight --region ap-south-1 --query 'Stacks[0].Outputs'
+aws cloudformation describe-stacks --stack-name zonelight-classroom --profile zonelight --region ap-southeast-2 --query 'Stacks[0].Outputs'
 ```
 
 Copy `.env.example` to `.env`, then set AWS_REGION, AWS_PROFILE=zonelight and AWS_LAMBDA_FUNCTION_URL to the FunctionUrl output. Use a role with the LaptopInvokePolicyArn policy attached by your account administrator. Same-account callers need both lambda:InvokeFunctionUrl and lambda:InvokeFunction permissions (the supplied policy includes both). Restart the backend and choose AWS cloud in the dashboard. It should show CLOUD CONNECTED. A configured URL without working credentials activates LOCAL FALLBACK ACTIVE.
@@ -66,9 +65,19 @@ Default engine interval is 0.2 seconds: up to five Lambda requests, ten IoT mess
 To remove the deployed stack yourself:
 
 ```powershell
-sam delete --stack-name zonelight-classroom --profile zonelight --region ap-south-1
+sam delete --stack-name zonelight-classroom --profile zonelight --region ap-southeast-2
 ```
 
 The laptop website is still local, and no public frontend hosting is configured. Hosting the camera backend remotely would require a separate local capture agent and authenticated preview transport; the original privacy-first design deliberately keeps it on the laptop.
 
 References: [Lambda IAM URL authentication](https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html), [SAM FunctionUrlConfig](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-function-functionurlconfig.html), [IoT publish API](https://docs.aws.amazon.com/boto3/latest/reference/services/iot-data/client/publish.html).
+
+## Six-zone deployment scope and credit protection
+
+Only six-zone cloud brightness decisions and timestamped student-count records are required. One ESP32 controls six LEDs over the existing laptop HTTP bridge. The older two-zone report is superseded. No Node-RED, Thinger.io or additional sensor dependency is introduced.
+
+The local detector supplies anonymous counts and zone occupancy from an uploaded image or laptop camera. Image grayscale intensity estimates relative ambient brightness; it is not calibrated illuminance in lux. AWS computes the six brightness commands. Records include classroomId, timestamp, peopleDetected and classTime (the UTC start of the camera/image session). Counts are visible people, not unique attendance identities. Existing seven-day history expiry remains enabled.
+
+The loop interval is one second to reduce Lambda, IoT and DynamoDB usage. The AWS project must stay on the FREE plan; do not upgrade to PAID or activate advanced features. Check the remaining credit balance before deployment. AWS expires the Free plan when credits are exhausted or the Free period ends; budget alerts are not a hard cap. Stop local processing when the demonstration ends. No autonomous credit monitor or additional cloud features are deployed.
+
+The history table is retained on stack deletion; preserve its schema and retention policies. Function URL must remain AWS_IAM; the ESP32 receives six values through the local bridge, never AWS credentials. Only the classroom-specific IoT topics and history table are writable by Lambda. CloudTrail has no configured durable trail; AWS event history supplies the default 90-day management audit window.

@@ -102,3 +102,15 @@ def test_lambda_deployment_configuration_matches_local():
     assert handler.CONFIG['mapping']==m
     assert handler.CONFIG['classroom_id']==c['classroom_id']
     assert all(c[k]==v for k,v in handler.CONFIG['settings'].items())
+
+
+def test_class_time_is_validated_and_preserved(monkeypatch):
+    calls=[]
+    monkeypatch.setattr(handler,'publish_and_store',lambda m,l:calls.append(m))
+    m=metadata(); m['classTime']='2026-10-13T09:00:00+00:00'
+    assert handler.handler(event(m),None)['statusCode']==200
+    assert calls[0]['classTime']==m['classTime']
+    m['classTime']='not-a-date'
+    assert handler.handler(event(m),None)['statusCode']==400
+    m['classTime']='2026-10-13T09:00:00'
+    assert handler.handler(event(m),None)['statusCode']==400

@@ -25,3 +25,5 @@ def test_upload_image_with_mocked_detector(monkeypatch):
   assert response.json()['mode']=='IMAGE_FILE'
   state=client.post('/api/control',json={'action':'start'}).json()
   assert state['peopleDetected']==1 and state['sourceMode']=='IMAGE_FILE'
+  assert state['ambientLight']==0 and state['classTime']
+  assert len(state['lights'])==6

@@ -35,6 +35,7 @@ class Engine:
         self.lock = asyncio.Lock()
         self.logs = deque(maxlen=100)
         self.mode, self.running, self.ambient = 'SIMULATION', True, 450
+        self.class_time = datetime.now(timezone.utc).isoformat()
         self.scenario, self.boxes, self.latency = ['FRONT_LEFT','MIDDLE_RIGHT','BACK_LEFT'], [], 0
         self.frame = np.zeros((540,960,3),np.uint8)
         self.state, self.jpeg, self.counter = {}, b'', 0
@@ -72,6 +73,8 @@ class Engine:
                     self.log('Source unavailable; detection paused')
                 else:
                     self.frame=cv2.resize(frame,(self.config['frame_width'],self.config['frame_height']))
+                    # Relative camera brightness estimate; this is not a calibrated lux reading.
+                    self.ambient = float(cv2.cvtColor(self.frame, cv2.COLOR_BGR2GRAY).mean()) / 255 * 1000
                     if self.counter % self.config['process_every_n_frames'] == 0:
                         try:
                             self.boxes,self.latency = await asyncio.to_thread(self.detector.detect,self.frame)
@@ -88,8 +91,11 @@ class Engine:
         occupied=self.smoother.update(raw,start) if self.running else previous
         for z in ZONES:
             if occupied[z]!=previous[z]: self.log(f'{z} '+('occupied' if occupied[z] else 'empty'))
-        metadata={'classroomId':self.config['classroom_id'],'timestamp':datetime.now(timezone.utc).isoformat(),'peopleDetected':len(self.boxes),'occupiedZones':occupied,'ambientLight':self.ambient,'systemMode':self.lighting.mode}
-        cloud_lights=await self.cloud.decision(metadata)
+        metadata={'classroomId':self.config['classroom_id'],'timestamp':datetime.now(timezone.utc).isoformat(),'classTime':self.class_time,'peopleDetected':len(self.boxes),'occupiedZones':occupied,'ambientLight':self.ambient,'systemMode':self.lighting.mode}
+        if self.config['cloud_mode']=='LOCAL_DEMO' or self.cloud.failure or (self.running and self.mode in ('IMAGE_FILE','LIVE_CAMERA')):
+            cloud_lights=await self.cloud.decision(metadata)
+        else:
+            cloud_lights=self.lighting.calculate(occupied,self.ambient)
         if start-self.last_telemetry_log>=10:
             self.log('Telemetry sent to simulated cloud' if self.cloud.status=='SIMULATED CLOUD' else 'Telemetry sent to cloud' if self.cloud.status=='CLOUD CONNECTED' else 'Local fallback decision received')
             if 'OFFLINE' not in self.cloud.status: self.log('Cloud decision received')
@@ -205,6 +211,7 @@ async def control(body:Control):
             try: engine.source.open('LIVE_CAMERA',engine.config['camera_id'],engine.config)
             except ValueError as exc: raise HTTPException(400,str(exc))
             engine.mode='LIVE_CAMERA'; engine.running=True;engine.boxes=[]
+            engine.class_time=datetime.now(timezone.utc).isoformat()
         elif a=='stop_camera':
             engine.source.close();engine.mode='SIMULATION';engine.scenario=[];engine.boxes=[];engine.running=True
         elif a=='reset':
@@ -238,6 +245,7 @@ async def upload(file:UploadFile=File(...)):
             try: engine.source.open(mode,path,engine.config)
             except ValueError as exc: raise HTTPException(400,str(exc))
             engine.mode=mode;engine.running=True;engine.boxes=[];engine.counter=0
+            engine.class_time=datetime.now(timezone.utc).isoformat()
             engine.log(f'{mode} loaded locally')
         return {'mode':mode}
     except Exception:

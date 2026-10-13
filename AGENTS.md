@@ -74,6 +74,9 @@ Constraints for each level:
 - MUST flag best practices and explain trade-offs
 - MUST still execute the user's choice if they disagree with a suggestion
 
+## Saved guidance preference
+help_level: LOW
+
 ## Local AWS setup
 Profile: zonelight
 Selected Region: ap-southeast-2

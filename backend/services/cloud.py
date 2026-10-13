@@ -15,7 +15,7 @@ class CloudService:
         import boto3
         from botocore.auth import SigV4Auth
         from botocore.awsrequest import AWSRequest
-        region = os.getenv('AWS_REGION', 'ap-south-1')
+        region = os.getenv('AWS_REGION', 'ap-southeast-2')
         session = boto3.Session(profile_name=os.getenv('AWS_PROFILE') or None, region_name=region)
         credentials = session.get_credentials()
         if credentials is None:
@@ -33,7 +33,7 @@ class CloudService:
                 parsed = urlparse(url)
                 if parsed.scheme != 'https' or not parsed.hostname or not parsed.hostname.endswith('.on.aws'):
                     raise ConnectionError('Configure an HTTPS AWS Lambda Function URL')
-                fields = ('classroomId','timestamp','peopleDetected','occupiedZones','ambientLight','systemMode')
+                fields = ('classroomId','timestamp','peopleDetected','occupiedZones','ambientLight','systemMode','classTime')
                 payload = json.dumps({k:metadata[k] for k in fields if k in metadata}, allow_nan=False).encode()
                 headers = await asyncio.wait_for(asyncio.to_thread(self.sign_request, url, payload), timeout=4)
                 async with httpx.AsyncClient(timeout=3) as client:

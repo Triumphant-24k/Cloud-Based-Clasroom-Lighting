@@ -1,6 +1,11 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: ZoneLight AWS lighting decisions, IoT Core metadata/commands and cloud history
+Metadata:
+  AWSToolsMetrics:
+    AWSAgentToolkit: aws-cloudformation@3
+  com.aws.cloudformation.Context:
+    ref: [docs/cloud.md]
 Parameters:
   ClassroomId:
     Type: String

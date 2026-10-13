@@ -7,6 +7,7 @@ import time
 import uuid
 from pathlib import Path
 from decimal import Decimal
+from datetime import datetime
 try:
     from .decision import decide
 except ImportError:
@@ -40,7 +41,7 @@ def handler(event,context):
         if event.get('isBase64Encoded'): body=base64.b64decode(body,validate=True).decode()
         metadata=json.loads(body)
         fields={'classroomId','timestamp','peopleDetected','occupiedZones','ambientLight','systemMode'}
-        if not isinstance(metadata,dict) or set(metadata)!=fields: raise ValueError()
+        if not isinstance(metadata,dict) or set(metadata)-{'classTime'}!=fields: raise ValueError()
         if metadata['classroomId']!=os.getenv('CLASSROOM_ID',CONFIG['classroom_id']) or metadata['classroomId']!=CONFIG['classroom_id']: raise ValueError()
         if not isinstance(metadata['timestamp'],str) or not 1<=len(metadata['timestamp'])<=64: raise ValueError()
         if type(metadata['peopleDetected']) is not int or not 0<=metadata['peopleDetected']<=10000: raise ValueError()
@@ -49,6 +50,10 @@ def handler(event,context):
         if not isinstance(zones,dict) or set(zones)!=set(CONFIG['mapping']) or any(type(v) is not bool for v in zones.values()): raise ValueError()
         ambient=metadata['ambientLight']
         if type(ambient) not in (int,float) or not math.isfinite(ambient) or not 0<=ambient<=2000: raise ValueError()
+        for key in ('timestamp','classTime'):
+            if key in metadata:
+                parsed=datetime.fromisoformat(metadata[key].replace('Z','+00:00'))
+                if parsed.tzinfo is None: raise ValueError()
         lights=decide(zones,ambient,CONFIG['settings'],CONFIG['mapping'])
     except (ValueError,TypeError,KeyError,UnicodeError):
         return response(400,{'error':'Invalid occupancy metadata'})
