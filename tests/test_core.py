@@ -47,8 +47,8 @@ def test_cloud_failure_and_recovery():
  assert asyncio.run(cloud.decision(metadata))['LIGHT_6']==100;assert 'FALLBACK' in cloud.status
  cloud.failure=False;assert asyncio.run(cloud.decision(metadata))['LIGHT_6']==100;assert cloud.status=='SIMULATED CLOUD'
 
-def test_unconfigured_azure_falls_back(monkeypatch):
- monkeypatch.delenv('AZURE_FUNCTION_URL',raising=False)
+def test_unconfigured_aws_falls_back(monkeypatch):
+ monkeypatch.delenv('AWS_LAMBDA_FUNCTION_URL',raising=False)
  c,z,m=load_config();c['cloud_mode']='CLOUD_CONNECTED';cloud=CloudService(c,m)
  assert asyncio.run(cloud.decision({'occupiedZones':{},'ambientLight':80}))==dict.fromkeys(m.values(),0)
  assert 'OFFLINE' in cloud.status
@@ -61,8 +61,8 @@ def test_energy():
 def test_cloud_validates_command(monkeypatch):
  import httpx
  import backend.services.cloud as cloud_module
- monkeypatch.setenv('AZURE_FUNCTION_URL','https://example.test/lighting')
- monkeypatch.delenv('AZURE_IOT_DEVICE_CONNECTION_STRING',raising=False)
+ monkeypatch.setenv('AWS_LAMBDA_FUNCTION_URL','https://test.lambda-url.ap-south-1.on.aws/')
+ monkeypatch.setattr(CloudService,'sign_request',lambda self,url,payload: {'Content-Type':'application/json'})
  original=httpx.AsyncClient
  async def handler(request):
   return httpx.Response(200,json={'lights':{'LIGHT_1':999}})
@@ -74,8 +74,8 @@ def test_cloud_validates_command(monkeypatch):
 def test_cloud_connected_metadata_only(monkeypatch):
  import httpx
  import backend.services.cloud as cloud_module
- monkeypatch.setenv('AZURE_FUNCTION_URL','https://example.test/lighting')
- monkeypatch.delenv('AZURE_IOT_DEVICE_CONNECTION_STRING',raising=False)
+ monkeypatch.setenv('AWS_LAMBDA_FUNCTION_URL','https://test.lambda-url.ap-south-1.on.aws/')
+ monkeypatch.setattr(CloudService,'sign_request',lambda self,url,payload: {'Content-Type':'application/json'})
  original=httpx.AsyncClient
  c,z,m=load_config();c['cloud_mode']='CLOUD_CONNECTED'
  async def handler(request):

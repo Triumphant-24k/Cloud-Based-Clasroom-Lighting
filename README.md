@@ -24,9 +24,9 @@ Open http://localhost:5173. API documentation: http://127.0.0.1:8000/docs. pnpm 
 
 After installing dependencies, `./start-demo.ps1` launches both services in hidden windows and writes logs under `data/`. Do not run it while ports 8000 and 5173 are already in use. For unreliable networks, upgrade pip and use `pip install -r requirements.txt --timeout 120 --retries 8` to enable resumable large downloads.
 
-The default SIMULATION + LOCAL_DEMO + ESP32_SIMULATED setup needs no camera or Azure account. Click scenarios and wait one second for zone ON; empty zones switch OFF after five seconds. Switch lighting to MANUAL for independent sliders, then AUTO to recalculate immediately.
+The default SIMULATION + LOCAL_DEMO + ESP32_SIMULATED setup needs no camera or AWS account. Click scenarios and wait one second for zone ON; empty zones switch OFF after five seconds. Switch lighting to MANUAL for independent sliders, then AUTO to recalculate immediately.
 
-Upload JPG/PNG or MP4/AVI/MOV/MKV for real YOLO detection. The first detection downloads `yolov8n.pt`; internet is required once, or put pretrained weights in the repository and change `yolo_model`. Start Camera uses configured `camera_id`. Raw video remains local. Uploads and history are ignored by Git. Only the device connection string, function URL/key, and ESP32 URL belong in `.env` (copy `.env.example`). Never commit secrets.
+Upload JPG/PNG or MP4/AVI/MOV/MKV for real YOLO detection. The first detection downloads `yolov8n.pt`; internet is required once, or put pretrained weights in the repository and change `yolo_model`. Start Camera uses configured `camera_id`. Raw video remains local. Uploads and history are ignored by Git. Set AWS_REGION, AWS_PROFILE, AWS_LAMBDA_FUNCTION_URL and ESP32_URL in `.env` (copy `.env.example`). AWS credentials come from the SDK profile/temporary-role chain. Never commit secrets.
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q
@@ -40,4 +40,9 @@ See [architecture](docs/architecture.md), [vision](docs/computer_vision.md), [ca
 
 ## Scope of validation
 
-Simulation, APIs, history, smoothing, energy calculations, WebSocket updates and build are automated. Real Azure requires your deployment and credentials; real camera and ESP32 require accessible hardware. Firmware is an example for Arduino ESP32 3.x and ArduinoJson 7, and must be compiled/flashed with your board configuration. YOLO accuracy depends on camera view, occlusion, confidence and calibrated polygons. Review Ultralytics licensing before commercial distribution: https://www.ultralytics.com/license.
+Simulation, APIs, history, smoothing, energy calculations, WebSocket updates and build are automated. Real AWS requires your deployment and credentials; real camera and ESP32 require accessible hardware. Firmware is an example for Arduino ESP32 3.x and ArduinoJson 7, and must be compiled/flashed with your board configuration. YOLO accuracy depends on camera view, occlusion, confidence and calibrated polygons. Review Ultralytics licensing before commercial distribution: https://www.ultralytics.com/license.
+
+
+## AWS deployment
+
+The cloud implementation uses an IAM-authenticated Lambda Function URL, AWS IoT Core telemetry/automatic commands, DynamoDB audit history and CloudWatch logs. Deployable SAM infrastructure is in cloud/template.yaml. Run python -m tools.prepare_aws before building it. See docs/cloud.md for complete deployment, credentials, permissions, verification and teardown instructions. This migration does not provision resources or publicly host the local dashboard.

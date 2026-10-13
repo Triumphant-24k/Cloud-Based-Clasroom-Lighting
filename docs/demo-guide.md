@@ -11,4 +11,4 @@
 9. On a working laptop choose Start Camera. If unavailable, the API returns an actionable error and simulation remains usable.
 10. Inspect analytics, estimated cumulative energy, events, and API docs. Reset clears occupancy and returns to empty simulation.
 
-Do not present simulated ambient light, synthetic persons, simulated cloud/device, or estimated watts as physical measurements. Real Azure and hardware need separately provisioned resources. Test on recorded footage before relying on control in a classroom.
+Do not present simulated ambient light, synthetic persons, simulated cloud/device, or estimated watts as physical measurements. Real AWS and hardware need separately provisioned resources. Test on recorded footage before relying on control in a classroom.

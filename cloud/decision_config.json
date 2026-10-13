@@ -1,0 +1,18 @@
+{
+  "classroom_id": "CLASSROOM-01",
+  "settings": {
+    "bright_threshold": 700,
+    "moderate_threshold": 300,
+    "bright_brightness": 30,
+    "moderate_brightness": 60,
+    "dark_brightness": 100
+  },
+  "mapping": {
+    "FRONT_LEFT": "LIGHT_1",
+    "FRONT_RIGHT": "LIGHT_2",
+    "MIDDLE_LEFT": "LIGHT_3",
+    "MIDDLE_RIGHT": "LIGHT_4",
+    "BACK_LEFT": "LIGHT_5",
+    "BACK_RIGHT": "LIGHT_6"
+  }
+}

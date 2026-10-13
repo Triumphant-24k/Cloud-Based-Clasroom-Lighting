@@ -7,3 +7,6 @@ uploads/
 *.pt
 frontend/node_modules/
 frontend/dist/
+.aws-sam/
+cloud/.aws-sam/
+cloud/samconfig.toml

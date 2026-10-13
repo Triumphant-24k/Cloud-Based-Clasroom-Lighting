@@ -1,0 +1,96 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: ZoneLight AWS lighting decisions, IoT Core metadata/commands and cloud history
+Parameters:
+  ClassroomId:
+    Type: String
+    Default: CLASSROOM-01
+    AllowedPattern: '[A-Za-z0-9_-]{1,64}'
+Resources:
+  HistoryTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: classroomId
+          AttributeType: S
+        - AttributeName: recordId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: classroomId
+          KeyType: HASH
+        - AttributeName: recordId
+          KeyType: RANGE
+      SSESpecification:
+        SSEEnabled: true
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+  DecisionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: lambda_handler.handler
+      Runtime: python3.12
+      Architectures: [arm64]
+      MemorySize: 128
+      Timeout: 6
+      ReservedConcurrentExecutions: 2
+      FunctionUrlConfig:
+        AuthType: AWS_IAM
+      Environment:
+        Variables:
+          CLASSROOM_ID: !Ref ClassroomId
+          HISTORY_TABLE: !Ref HistoryTable
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: dynamodb:PutItem
+              Resource: !GetAtt HistoryTable.Arn
+            - Effect: Allow
+              Action: iot:DescribeEndpoint
+              Resource: '*'
+            - Effect: Allow
+              Action: iot:Publish
+              Resource:
+                - !Sub arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:topic/zonelight/${ClassroomId}/telemetry
+                - !Sub arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:topic/zonelight/${ClassroomId}/commands
+  DecisionLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${DecisionFunction}
+      RetentionInDays: 7
+  LaptopInvokePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Attach to the laptop AWS role to invoke only this lighting endpoint
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: lambda:InvokeFunctionUrl
+            Resource: !GetAtt DecisionFunction.Arn
+            Condition:
+              StringEquals:
+                lambda:FunctionUrlAuthType: AWS_IAM
+          - Effect: Allow
+            Action: lambda:InvokeFunction
+            Resource: !GetAtt DecisionFunction.Arn
+            Condition:
+              Bool:
+                lambda:InvokedViaFunctionUrl: 'true'
+Outputs:
+  FunctionUrl:
+    Value: !GetAtt DecisionFunctionUrl.FunctionUrl
+  FunctionArn:
+    Value: !GetAtt DecisionFunction.Arn
+  HistoryTableName:
+    Value: !Ref HistoryTable
+  LaptopInvokePolicyArn:
+    Value: !Ref LaptopInvokePolicy
+  TelemetryTopic:
+    Value: !Sub zonelight/${ClassroomId}/telemetry
+  CommandTopic:
+    Value: !Sub zonelight/${ClassroomId}/commands
