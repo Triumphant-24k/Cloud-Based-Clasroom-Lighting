@@ -1,4 +1,4 @@
-"""IAM-authenticated AWS Lambda command path; metadata only."""
+"""IAM-authenticated AWS Lambda command path; metadata and image analysis."""
 import asyncio
 import json
 import os
@@ -52,6 +52,42 @@ class CloudService:
         request = AWSRequest(method='POST', url=url, data=payload, headers={'Content-Type':'application/json'})
         SigV4Auth(credentials.get_frozen_credentials(), 'lambda', region).add_auth(request)
         return dict(request.headers.items())
+
+    async def analyze(self, frame, floor_corners, class_time, system_mode):
+        import base64
+        import cv2
+        from datetime import datetime, timezone
+        if self.failure:
+            self.status = 'CLOUD OFFLINE · VISION PAUSED'
+            raise ConnectionError('Simulated outage')
+        try:
+            await asyncio.wait_for(asyncio.to_thread(self.check_credit_budget),timeout=8)
+            url=os.getenv('AWS_LAMBDA_FUNCTION_URL','')
+            parsed=urlparse(url)
+            if parsed.scheme!='https' or not parsed.hostname or not parsed.hostname.endswith('.on.aws'):
+                raise ConnectionError('Configure an HTTPS AWS Lambda Function URL')
+            ok, encoded=cv2.imencode('.jpg',frame,[cv2.IMWRITE_JPEG_QUALITY,85])
+            if not ok:
+                raise ValueError('Image encoding failed')
+            data={'image':base64.b64encode(encoded.tobytes()).decode(),'floorCorners':floor_corners,
+                  'classroomId':self.config['classroom_id'],'timestamp':datetime.now(timezone.utc).isoformat(),
+                  'classTime':class_time,'systemMode':system_mode}
+            payload=json.dumps(data,allow_nan=False).encode()
+            headers=await asyncio.wait_for(asyncio.to_thread(self.sign_request,url,payload),timeout=4)
+            async with httpx.AsyncClient(timeout=75) as client:
+                response=await client.post(url,content=payload,headers=headers)
+                response.raise_for_status()
+                result=response.json()
+            if result['computeLocation']!='AWS_LAMBDA' or set(result['lights'])!=set(self.mapping.values()):
+                raise ValueError('Invalid cloud vision result')
+            if result['lights']!=decide(result['occupiedZones'],result['ambientLight'],self.config,self.mapping):
+                raise ValueError('Cloud configuration mismatch')
+            self.last_analysis={k:result[k] for k in ('timestamp','classroomId','peopleDetected','lights','requestId','recordId','computeLocation','model','floorMapping')}
+            self.status,self.last_error='CLOUD CONNECTED',None
+            return result
+        except Exception as exc:
+            self.status,self.last_error='CLOUD OFFLINE · VISION PAUSED',type(exc).__name__
+            raise
 
     async def decision(self, metadata):
         try:

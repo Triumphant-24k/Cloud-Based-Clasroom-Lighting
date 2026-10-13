@@ -2,7 +2,9 @@ $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
 $taskPython = Join-Path $PSScriptRoot '.venv\Scripts\python.exe'
 if (-not (Test-Path -LiteralPath $taskPython)) { throw 'Create .venv and install requirements as described in README.md first.' }
-$taskNode = (Get-Command node -ErrorAction Stop).Source
+ $taskNodeCommand = Get-Command node -ErrorAction SilentlyContinue
+$taskNode = if ($taskNodeCommand) { $taskNodeCommand.Source } else { 'C:\Users\Trium\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe' }
+if (-not (Test-Path -LiteralPath $taskNode)) { throw 'Node.js runtime was not found.' }
 $taskVite = Join-Path $PSScriptRoot 'frontend\node_modules\vite\bin\vite.js'
 if (-not (Test-Path -LiteralPath $taskVite)) { throw 'Run npm install in frontend first.' }
 $taskLogDirectory = Join-Path $PSScriptRoot 'data'

@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: ZoneLight AWS lighting decisions, IoT Core metadata/commands and cloud history
+Description: ZoneLight on-demand cloud vision, floor geometry, lighting decisions and classroom history
 Metadata:
   AWSToolsMetrics:
     AWSAgentToolkit: aws-cloudformation@3
@@ -11,7 +11,55 @@ Parameters:
     Type: String
     Default: CLASSROOM-01
     AllowedPattern: '[A-Za-z0-9_-]{1,64}'
+  FunctionConcurrency:
+    Type: Number
+    Default: 2
+    AllowedValues: [0, 1, 2]
 Resources:
+  DeploymentArtifacts:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Private Lambda code and model artifacts only; no classroom images
+        must: [Block public access, Enforce TLS, Preserve deployed artifacts]
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: OldArtifactVersions
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 7
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+  ArtifactTLS:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref DeploymentArtifacts
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - !GetAtt DeploymentArtifacts.Arn
+              - !Sub '${DeploymentArtifacts.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
   HistoryTable:
     Type: AWS::DynamoDB::Table
     DeletionPolicy: Retain
@@ -37,12 +85,12 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: ./
-      Handler: lambda_handler.handler
+      Handler: cloud.vision_handler.handler
       Runtime: python3.12
       Architectures: [arm64]
-      MemorySize: 256
-      Timeout: 10
-      ReservedConcurrentExecutions: 2
+      MemorySize: 2048
+      Timeout: 60
+      ReservedConcurrentExecutions: !Ref FunctionConcurrency
       FunctionUrlConfig:
         AuthType: AWS_IAM
       Environment:
@@ -87,6 +135,8 @@ Resources:
               Bool:
                 lambda:InvokedViaFunctionUrl: 'true'
 Outputs:
+  ArtifactBucketName:
+    Value: !Ref DeploymentArtifacts
   FunctionUrl:
     Value: !GetAtt DecisionFunctionUrl.FunctionUrl
   FunctionArn:

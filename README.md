@@ -46,3 +46,7 @@ Simulation, APIs, history, smoothing, energy calculations, WebSocket updates and
 ## AWS deployment
 
 The cloud implementation uses an IAM-authenticated Lambda Function URL, AWS IoT Core telemetry/automatic commands, DynamoDB audit history and CloudWatch logs. Deployable SAM infrastructure is in cloud/template.yaml. Run python -m tools.prepare_aws before building it. See docs/cloud.md for complete deployment, credentials, permissions, verification and teardown instructions. This migration does not provision resources or publicly host the local dashboard.
+
+## ESP32 hardware integration
+
+The prepared six-LED firmware and authenticated laptop-to-board connection are documented in [docs/esp32.md](docs/esp32.md). Run `python -m tools.prepare_esp32` once to create a matching local device key; edit Wi-Fi credentials in the ignored `firmware/esp32_lighting/secrets.h`. The webpage ESP32 connection panel checks the board before enabling real-device mode. LEDs turn off after 30 seconds without the laptop heartbeat. The classic ESP32 pin layout must be checked against the board model before flashing.

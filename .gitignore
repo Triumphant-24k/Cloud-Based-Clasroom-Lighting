@@ -14,3 +14,9 @@ cloud/samconfig.toml
 cloud/deployment-template.json
 
 Ultralytics/
+
+*.onnx
+cloud/vision-deployment-template.json
+
+firmware/esp32_lighting/secrets.h
+firmware/esp32_lighting/build/

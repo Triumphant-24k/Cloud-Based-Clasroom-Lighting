@@ -21,5 +21,6 @@
   "tick_seconds": 1.0,
   "max_upload_mb": 200,
   "aws_credit_budget": 100,
-  "aws_credit_buffer": 20
+  "aws_credit_buffer": 20,
+  "cloud_frame_interval": 10
 }

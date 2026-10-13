@@ -2,6 +2,7 @@ from pathlib import Path
 import json
 from cfnlint.decode import decode
 root=Path(__file__).resolve().parents[1]
+raise SystemExit('Cloud vision uses tools.package_vision; do not deploy the old inline lighting-only package.')
 template, errors=decode(str(root/'cloud/template.yaml'))
 assert not errors, errors
 handler=(root/'cloud/lambda_handler.py').read_text()

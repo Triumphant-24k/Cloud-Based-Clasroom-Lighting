@@ -30,6 +30,7 @@ def publish_and_store(metadata,lights):
         _iot.publish(topic=prefix+'/commands',qos=1,retain=False,payload=json.dumps({'timestamp':metadata['timestamp'],'lights':lights}).encode())
     record={**metadata,'lights':lights,'recordId':metadata['timestamp']+'#'+uuid.uuid4().hex,'expiresAt':int(time.time())+7*86400}
     boto3.resource('dynamodb',config=Config(connect_timeout=1,read_timeout=1,retries={'max_attempts':0})).Table(os.environ['HISTORY_TABLE']).put_item(Item=json.loads(json.dumps(record),parse_float=Decimal))
+    return record
 
 def handler(event,context):
     def response(code,body):
