@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from backend.config import ROOT, ZONES, load_config
 from backend.cv.camera import CameraSource
 from backend.cv.detector import PersonDetector
-from backend.cv.zone_mapper import assign_people
+from backend.cv.zone_mapper import assign_people, floor_zones
 from backend.cv.smoothing import OccupancySmoother
 from backend.services.lighting import LightingController
 from backend.services.cloud import CloudService
@@ -28,6 +28,8 @@ load_dotenv(ROOT/'.env')
 class Engine:
     def __init__(self):
         self.config, self.zones, self.mapping = load_config()
+        self.default_zones = self.zones.copy()
+        self.floor_corners = []
         self.source, self.detector = CameraSource(), PersonDetector(self.config)
         self.smoother = OccupancySmoother(ZONES,self.config['zone_on_delay'],self.config['zone_off_delay'])
         self.lighting, self.cloud = LightingController(self.config,self.mapping), CloudService(self.config,self.mapping)
@@ -89,10 +91,13 @@ class Engine:
             self.last_people=len(self.boxes)
         previous=self.smoother.state.copy()
         occupied=self.smoother.update(raw,start) if self.running else previous
+        if self.running and self.mode=='IMAGE_FILE':
+            occupied={zone:count>0 for zone,count in raw.items()}
+            self.smoother.state=occupied.copy()
         for z in ZONES:
             if occupied[z]!=previous[z]: self.log(f'{z} '+('occupied' if occupied[z] else 'empty'))
         metadata={'classroomId':self.config['classroom_id'],'timestamp':datetime.now(timezone.utc).isoformat(),'classTime':self.class_time,'peopleDetected':len(self.boxes),'occupiedZones':occupied,'ambientLight':self.ambient,'systemMode':self.lighting.mode}
-        if self.config['cloud_mode']=='LOCAL_DEMO' or self.cloud.failure or (self.running and self.mode in ('IMAGE_FILE','LIVE_CAMERA')):
+        if (self.config['cloud_mode']=='LOCAL_DEMO' or self.cloud.failure or (self.running and self.mode in ('IMAGE_FILE','LIVE_CAMERA'))) and not (self.mode=='IMAGE_FILE' and not self.running):
             cloud_lights=await self.cloud.decision(metadata)
         else:
             cloud_lights=self.lighting.calculate(occupied,self.ambient)
@@ -118,7 +123,7 @@ class Engine:
         if device!=self.last_device:
             self.log(device); self.last_device=device
         elapsed=max(.001,time.monotonic()-start)
-        self.state={**metadata,'occupiedZoneCount':sum(occupied.values()),'occupancyPercentage':sum(occupied.values())/6*100,'lights':lights,'energy':self.energy.update(lights,start),'cloudStatus':self.cloud.status,'cloudMode':self.config['cloud_mode'],'esp32Mode':self.config['esp32_mode'],'esp32Status':device,'cameraStatus':('RUNNING' if self.running else 'PAUSED')+' · '+self.mode,'sourceMode':self.mode,'detectionRunning':self.running,'cvFPS':min(1/self.config['tick_seconds'],1/elapsed) if self.running else 0,'inferenceLatency':self.latency,'zones':self.zones,'mapping':self.mapping,'logs':list(self.logs)}
+        self.state={**metadata,'occupiedZoneCount':sum(occupied.values()),'occupancyPercentage':sum(occupied.values())/6*100,'lights':lights,'energy':self.energy.update(lights,start),'cloudStatus':self.cloud.status,'cloudMode':self.config['cloud_mode'],'esp32Mode':self.config['esp32_mode'],'esp32Status':device,'cameraStatus':('RUNNING' if self.running else 'PAUSED')+' · '+self.mode,'sourceMode':self.mode,'detectionRunning':self.running,'cvFPS':min(1/self.config['tick_seconds'],1/elapsed) if self.running else 0,'inferenceLatency':self.latency,'zones':self.zones,'floorCorners':self.floor_corners,'cloudAnalysis':self.cloud.last_analysis,'mapping':self.mapping,'logs':list(self.logs)}
         overlay=self.frame.copy()
         for z,p in self.zones.items():
             poly=np.array([[x*w,y*h] for x,y in p],np.int32)
@@ -135,6 +140,9 @@ class Engine:
         if start-self.last_save>=1:
             self.history.save({k:v for k,v in self.state.items() if k not in ('logs','zones','mapping')})
             self.last_save=start
+        if self.mode=='IMAGE_FILE' and self.running:
+            self.running=False
+            self.state.update(detectionRunning=False,cameraStatus='PAUSED · IMAGE_FILE',cvFPS=0)
 
 engine=None
 
@@ -176,6 +184,33 @@ def history(limit:int=120): return engine.history.read(max(1,min(limit,1000)))
 @app.get('/api/preview')
 def preview(): return Response(engine.jpeg,media_type='image/jpeg',headers={'Cache-Control':'no-store'})
 
+@app.get('/api/raw-preview')
+def raw_preview():
+    _, encoded = cv2.imencode('.jpg', engine.frame)
+    return Response(encoded.tobytes(), media_type='image/jpeg', headers={'Cache-Control':'no-store'})
+
+class FloorCalibration(BaseModel):
+    corners: list[list[float]]
+
+@app.post('/api/floor')
+async def calibrate_floor(body: FloorCalibration):
+    async with engine.lock:
+        if engine.mode != 'IMAGE_FILE':
+            raise HTTPException(409, 'Upload a classroom image first')
+        try:
+            zones = floor_zones(body.corners)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
+        engine.zones = zones
+        engine.floor_corners = body.corners
+        engine.smoother = OccupancySmoother(ZONES, engine.config['zone_on_delay'], engine.config['zone_off_delay'])
+        engine.running = True
+        engine.counter = 0
+        engine.lighting.mode = 'AUTO'
+        engine.log('Floor calibrated locally: six perspective zones')
+        await engine.tick()
+        return engine.state
+
 @app.get('/api/config')
 def config(): return {'settings':engine.config,'zones':engine.zones,'mapping':engine.mapping}
 
@@ -187,6 +222,7 @@ async def control(body:Control):
             scenarios={'front':ZONES[:2],'middle':ZONES[2:4],'back':ZONES[4:],'scattered':[ZONES[0],ZONES[3],ZONES[4]],'full':ZONES,'empty':[]}
             if v not in scenarios: raise HTTPException(400,'Unknown scenario')
             engine.source.close(); engine.mode='SIMULATION';engine.scenario=scenarios[v];engine.running=True
+            engine.zones=engine.default_zones.copy();engine.floor_corners=[]
         elif a=='ambient':
             if not isinstance(v,(int,float)) or not 0<=v<=2000: raise HTTPException(400,'Ambient level must be 0–2000')
             engine.ambient=v
@@ -211,12 +247,15 @@ async def control(body:Control):
             try: await asyncio.to_thread(engine.source.open,'LIVE_CAMERA',engine.config['camera_id'],engine.config)
             except ValueError as exc: raise HTTPException(400,str(exc))
             engine.mode='LIVE_CAMERA'; engine.running=True;engine.boxes=[];engine.counter=0
+            engine.zones=engine.default_zones.copy();engine.floor_corners=[]
             engine.smoother=OccupancySmoother(ZONES,engine.config['zone_on_delay'],engine.config['zone_off_delay'])
             engine.class_time=datetime.now(timezone.utc).isoformat()
         elif a=='stop_camera':
             engine.source.close();engine.mode='SIMULATION';engine.scenario=[];engine.boxes=[];engine.running=True
+            engine.zones=engine.default_zones.copy();engine.floor_corners=[]
         elif a=='reset':
             engine.source.close();engine.mode='SIMULATION';engine.scenario=[];engine.boxes=[];engine.running=True
+            engine.zones=engine.default_zones.copy();engine.floor_corners=[]
             engine.smoother=OccupancySmoother(ZONES,engine.config['zone_on_delay'],engine.config['zone_off_delay'])
             engine.lighting.mode='AUTO';engine.cloud.failure=False
         elif a=='sample':
@@ -246,10 +285,14 @@ async def upload(file:UploadFile=File(...)):
             try: engine.source.open(mode,path,engine.config)
             except ValueError as exc: raise HTTPException(400,str(exc))
             engine.mode=mode;engine.running=True;engine.boxes=[];engine.counter=0
+            engine.zones=engine.default_zones.copy();engine.floor_corners=[]
             engine.smoother=OccupancySmoother(ZONES,engine.config['zone_on_delay'],engine.config['zone_off_delay'])
             engine.class_time=datetime.now(timezone.utc).isoformat()
+            if mode=='IMAGE_FILE':
+                engine.lighting.mode='AUTO'
+                await engine.tick()
             engine.log(f'{mode} loaded locally')
-        return {'mode':mode}
+        return {'mode':mode,'state':engine.state}
     except Exception:
         path.unlink(missing_ok=True)
         raise

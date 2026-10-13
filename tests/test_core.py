@@ -85,5 +85,5 @@ def test_cloud_connected_metadata_only(monkeypatch):
   return httpx.Response(200,json={'lights':dict.fromkeys(m.values(),30)})
  monkeypatch.setattr(cloud_module.httpx,'AsyncClient',lambda **kwargs:original(transport=httpx.MockTransport(handler)))
  cloud=CloudService(c,m)
- assert asyncio.run(cloud.decision({'occupiedZones':dict.fromkeys(ZONES,True),'ambientLight':850}))['LIGHT_6']==30
+ assert asyncio.run(cloud.decision({'classroomId':c['classroom_id'],'timestamp':'2026-10-13T00:00:00+00:00','peopleDetected':6,'systemMode':'AUTO','occupiedZones':dict.fromkeys(ZONES,True),'ambientLight':850}))['LIGHT_6']==30
  assert cloud.status=='CLOUD CONNECTED'

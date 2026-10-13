@@ -13,6 +13,7 @@ class CloudService:
         self.status, self.last_error = 'SIMULATED CLOUD', None
         self._credit_checked_at = 0
         self._billing = None
+        self.last_analysis = None
 
     def check_credit_budget(self):
         if self._credit_checked_at and time.monotonic() - self._credit_checked_at < 60:
@@ -73,6 +74,7 @@ class CloudService:
                     raise ValueError('Invalid cloud lighting command')
                 if lights != decide(metadata['occupiedZones'],metadata['ambientLight'],self.config,self.mapping):
                     raise ValueError('Cloud/local configuration mismatch')
+                self.last_analysis = {'timestamp':metadata['timestamp'],'classroomId':metadata['classroomId'],'peopleDetected':metadata['peopleDetected'],'lights':lights}
                 self.status, self.last_error = 'CLOUD CONNECTED', None
                 return lights
             self.status, self.last_error = 'SIMULATED CLOUD', None

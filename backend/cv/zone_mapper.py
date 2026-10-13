@@ -24,3 +24,25 @@ def assign_people(boxes, zones, width, height, method='foot_point', threshold=0.
             if scores[best] >= threshold:
                 counts[best] += 1
     return counts
+
+
+def floor_zones(corners):
+    """Project a 2-column, 3-row rectangular floor into an image.
+
+    Corners: front-left, front-right, back-right, back-left (board at front).
+    Requires a planar rectangular classroom and user-calibrated corners.
+    """
+    points = np.asarray(corners, dtype=np.float32)
+    if points.shape != (4, 2) or not np.isfinite(points).all() or ((points < 0) | (points > 1)).any():
+        raise ValueError('Select four corners inside the image')
+    contour = points.reshape(-1, 1, 2)
+    if not cv2.isContourConvex(contour) or abs(cv2.contourArea(contour)) < .01:
+        raise ValueError('Floor corners must form a convex boundary with a useful area')
+    transform = cv2.getPerspectiveTransform(np.float32([[0,0],[1,0],[1,1],[0,1]]), points)
+    result = {}
+    for row, name in enumerate(('FRONT', 'MIDDLE', 'BACK')):
+        for col, side in enumerate(('LEFT', 'RIGHT')):
+            x, y = col / 2, row / 3
+            cell = np.float32([[[x,y],[x+.5,y],[x+.5,y+1/3],[x,y+1/3]]])
+            result[name+'_'+side] = cv2.perspectiveTransform(cell, transform)[0].tolist()
+    return result

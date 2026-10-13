@@ -27,3 +27,28 @@ def test_upload_image_with_mocked_detector(monkeypatch):
   assert state['peopleDetected']==1 and state['sourceMode']=='IMAGE_FILE'
   assert state['ambientLight']==0 and state['classTime']
   assert len(state['lights'])==6
+
+
+def test_uploaded_image_is_analyzed_once_and_uses_auto(monkeypatch):
+ import backend.main as main
+ from backend.cv.detector import PersonDetector
+ from backend.services.cloud import CloudService
+ from cloud.decision import decide
+ calls=[]
+ monkeypatch.setattr(PersonDetector,'detect',lambda self,frame:([[20,20,100,100]],5))
+ async def cloud(self,metadata):
+  calls.append(metadata)
+  return decide(metadata['occupiedZones'],metadata['ambientLight'],self.config,self.mapping)
+ monkeypatch.setattr(CloudService,'decision',cloud)
+ _,png=cv2.imencode('.png',np.zeros((540,960,3),np.uint8))
+ with TestClient(app) as client:
+  calls.clear();main.engine.lighting.mode='MANUAL'
+  response=client.post('/api/upload',files={'file':('classroom.png',png.tobytes(),'image/png')})
+  state=response.json()['state']
+  assert response.status_code==200 and state['systemMode']=='AUTO'
+  assert state['peopleDetected']==1 and state['occupiedZoneCount']==1
+  assert state['lights']['LIGHT_1']==100 and not state['detectionRunning']
+  assert len(calls)==1
+  import asyncio
+  asyncio.run(main.engine.tick())
+  assert len(calls)==1
