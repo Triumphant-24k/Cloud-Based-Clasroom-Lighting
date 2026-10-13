@@ -10,3 +10,7 @@ frontend/dist/
 .aws-sam/
 cloud/.aws-sam/
 cloud/samconfig.toml
+
+cloud/deployment-template.json
+
+Ultralytics/

@@ -1,4 +1,6 @@
 import time
+import os
+from backend.config import ROOT
 
 class PersonDetector:
     def __init__(self, config):
@@ -6,6 +8,9 @@ class PersonDetector:
 
     def detect(self, frame):
         if self.model is None:
+            cache=ROOT/'data/ultralytics'
+            cache.mkdir(parents=True,exist_ok=True)
+            os.environ.setdefault('YOLO_CONFIG_DIR',str(cache))
             from ultralytics import YOLO
             self.model = YOLO(self.config['yolo_model'])
         start = time.perf_counter()

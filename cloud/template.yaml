@@ -40,8 +40,8 @@ Resources:
       Handler: lambda_handler.handler
       Runtime: python3.12
       Architectures: [arm64]
-      MemorySize: 128
-      Timeout: 6
+      MemorySize: 256
+      Timeout: 10
       ReservedConcurrentExecutions: 2
       FunctionUrlConfig:
         AuthType: AWS_IAM

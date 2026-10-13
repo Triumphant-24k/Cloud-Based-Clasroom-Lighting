@@ -208,9 +208,10 @@ async def control(body:Control):
         elif a=='start': engine.running=True
         elif a=='pause': engine.running=False
         elif a=='camera':
-            try: engine.source.open('LIVE_CAMERA',engine.config['camera_id'],engine.config)
+            try: await asyncio.to_thread(engine.source.open,'LIVE_CAMERA',engine.config['camera_id'],engine.config)
             except ValueError as exc: raise HTTPException(400,str(exc))
-            engine.mode='LIVE_CAMERA'; engine.running=True;engine.boxes=[]
+            engine.mode='LIVE_CAMERA'; engine.running=True;engine.boxes=[];engine.counter=0
+            engine.smoother=OccupancySmoother(ZONES,engine.config['zone_on_delay'],engine.config['zone_off_delay'])
             engine.class_time=datetime.now(timezone.utc).isoformat()
         elif a=='stop_camera':
             engine.source.close();engine.mode='SIMULATION';engine.scenario=[];engine.boxes=[];engine.running=True
@@ -245,6 +246,7 @@ async def upload(file:UploadFile=File(...)):
             try: engine.source.open(mode,path,engine.config)
             except ValueError as exc: raise HTTPException(400,str(exc))
             engine.mode=mode;engine.running=True;engine.boxes=[];engine.counter=0
+            engine.smoother=OccupancySmoother(ZONES,engine.config['zone_on_delay'],engine.config['zone_off_delay'])
             engine.class_time=datetime.now(timezone.utc).isoformat()
             engine.log(f'{mode} loaded locally')
         return {'mode':mode}

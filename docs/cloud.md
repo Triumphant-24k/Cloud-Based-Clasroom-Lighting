@@ -25,7 +25,7 @@ The Function URL requires AWS_IAM authentication; requests are signed with SigV4
 
 ## Deploy your stack
 
-Install the official AWS CLI v2 and AWS SAM CLI. Deployment creates billable resources and requires your AWS account. No stack was provisioned by this migration.
+The six-zone stack is deployed as `zonelight-classroom` in `ap-southeast-2`. It uses AWS Free plan credits. Keep the project on the Free plan. AWS CLI v2 is sufficient for deploying the inline Python code; SAM CLI is optional.
 
 From the repository root:
 
@@ -33,12 +33,12 @@ From the repository root:
 aws login --profile zonelight --region ap-southeast-2
 aws sts get-caller-identity --profile zonelight
 .\.venv\Scripts\python.exe -m tools.prepare_aws
-sam validate --lint --template-file cloud/template.yaml --region ap-southeast-2
-sam build --template-file cloud/template.yaml
-sam deploy --guided --profile zonelight --region ap-southeast-2
+.\.venv\Scripts\cfn-lint.exe cloud/template.yaml -r ap-southeast-2
+.\.venv\Scripts\python.exe -m tools.package_aws
+aws cloudformation deploy --template-file cloud/deployment-template.json --stack-name zonelight-classroom --capabilities CAPABILITY_IAM --parameter-overrides ClassroomId=CLASSROOM-01 --profile zonelight --region ap-southeast-2
 ```
 
-Choose a stack name such as `zonelight-classroom`. Set ClassroomId to the exact `classroom_id` from config/system_config.json (default CLASSROOM-01). Acknowledge IAM resource creation during your deployment. SAM packages only cloud/; it does not upload camera footage, local uploads, CV weights or the virtual environment. Run prepare_aws and redeploy whenever lighting thresholds or mapping change. The backend rejects cloud commands that disagree with local settings and falls back safely.
+Choose a stack name such as `zonelight-classroom`. Set ClassroomId to the exact `classroom_id` from config/system_config.json (default CLASSROOM-01). Acknowledge IAM resource creation during your deployment. The inline packager includes only the Lambda handler, shared decision logic and decision configuration; it does not upload camera footage, local uploads, CV weights or the virtual environment. It requires the existing cfn-lint development dependency. Run prepare_aws and redeploy whenever lighting thresholds or mapping change. The backend rejects cloud commands that disagree with local settings and falls back safely.
 
 Retrieve outputs:
 
@@ -54,18 +54,18 @@ In AWS IoT Core's MQTT test client, subscribe to `zonelight/CLASSROOM-01/telemet
 
 DynamoDB stores occupancy, ambient, proposed automatic brightness and systemMode with a unique recordId and expiresAt. In MANUAL mode these are automatic proposals, not applied output measurements. Seven-day TTL deletion is asynchronous. The dashboard continues to chart local SQLite history; DynamoDB is the cloud audit copy. CloudWatch log group retention is seven days. The table is retained when deleting the stack; remove it separately only if you intentionally want to discard cloud history.
 
-Only classroomId, timestamp, peopleDetected, occupiedZones, ambientLight and systemMode enter the cloud. Lambda rejects missing, unexpected or invalid fields. Per-classroom topic permissions prevent topic/path injection. Real lighting power remains an estimate.
+Only classroomId, timestamp, classTime, peopleDetected, occupiedZones, ambientLight and systemMode enter the cloud. Lambda rejects missing, unexpected or invalid fields. Per-classroom topic permissions prevent topic/path injection. Real lighting power remains an estimate.
 
 ## Failures and cost
 
 Missing credentials, expired SSO login, denied IAM permissions, timeouts, bad responses, mismatched deployment config or failed IoT/DynamoDB writes trigger local fallback. Requests are retried on later engine ticks; successful responses restore the cloud automatically. Simulate Cloud Failure exercises this same fallback. Diagnostics record exception types without printing credentials. If a Lambda request times out, it may still finish and write cloud audit records; unique record IDs preserve them.
 
-Default engine interval is 0.2 seconds: up to five Lambda requests, ten IoT messages and five DynamoDB writes per second while cloud-connected. Use LOCAL_DEMO while not demonstrating, and stop the backend when finished. Lambda concurrency is capped at two; account quotas can prevent deployment of this reservation. Modify it to suit your account if needed. No AWS services are created by merely running LOCAL_DEMO.
+Default engine interval is one second: at most one Lambda request, two IoT messages and one DynamoDB write per tick while actively processing an image or laptop camera. Paused and simulated sources do not make cloud requests. Use LOCAL_DEMO while not demonstrating, and stop the backend when finished. Lambda concurrency is capped at two; account quotas can prevent deployment of this reservation. Modify it to suit your account if needed. No AWS services are created by merely running LOCAL_DEMO.
 
 To remove the deployed stack yourself:
 
 ```powershell
-sam delete --stack-name zonelight-classroom --profile zonelight --region ap-southeast-2
+aws cloudformation delete-stack --stack-name zonelight-classroom --profile zonelight --region ap-southeast-2
 ```
 
 The laptop website is still local, and no public frontend hosting is configured. Hosting the camera backend remotely would require a separate local capture agent and authenticated preview transport; the original privacy-first design deliberately keeps it on the laptop.
@@ -81,3 +81,5 @@ The local detector supplies anonymous counts and zone occupancy from an uploaded
 The loop interval is one second to reduce Lambda, IoT and DynamoDB usage. The AWS project must stay on the FREE plan; do not upgrade to PAID or activate advanced features. Check the remaining credit balance before deployment. AWS expires the Free plan when credits are exhausted or the Free period ends; budget alerts are not a hard cap. Stop local processing when the demonstration ends. No autonomous credit monitor or additional cloud features are deployed.
 
 The history table is retained on stack deletion; preserve its schema and retention policies. Function URL must remain AWS_IAM; the ESP32 receives six values through the local bridge, never AWS credentials. Only the classroom-specific IoT topics and history table are writable by Lambda. CloudTrail has no configured durable trail; AWS event history supplies the default 90-day management audit window.
+
+The laptop checks Free plan status and credit consumption before its first cloud request, then at most once per minute. It subtracts automatic earned bonuses when computing total usage against the original $100 budget. Cloud requests stop at $80 reported consumption, leaving a $20 buffer, or if the Free plan is inactive/changed or billing checks fail. Local fallback then applies. AWS billing data can lag: this is not an exact hard $100 cutoff and only governs this backend, not other AWS workloads. The Free plan prevents paid overages; do not upgrade it. Current balance includes a $20 automatic AWS activity bonus.

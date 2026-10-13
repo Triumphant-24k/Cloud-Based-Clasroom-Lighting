@@ -2,7 +2,7 @@
   "classroom_id": "CLASSROOM-01",
   "yolo_model": "yolov8n.pt",
   "confidence_threshold": 0.35,
-  "camera_id": 0,
+  "camera_id": 1,
   "frame_width": 960,
   "frame_height": 540,
   "process_every_n_frames": 2,
@@ -16,8 +16,10 @@
   "moderate_brightness": 60,
   "dark_brightness": 100,
   "light_wattage": 40,
-  "cloud_mode": "LOCAL_DEMO",
+  "cloud_mode": "CLOUD_CONNECTED",
   "esp32_mode": "ESP32_SIMULATED",
   "tick_seconds": 1.0,
-  "max_upload_mb": 200
+  "max_upload_mb": 200,
+  "aws_credit_budget": 100,
+  "aws_credit_buffer": 20
 }

@@ -10,7 +10,15 @@ def main():
     args=parser.parse_args()
     if args.image: frame=cv2.imread(args.image)
     else:
-        cap=cv2.VideoCapture(args.camera);ok,frame=cap.read();cap.release()
+        from backend.cv.camera import CameraSource
+        from backend.config import load_config
+        cap=CameraSource()
+        try:
+            cap.open('LIVE_CAMERA',args.camera,load_config()[0]);frame=cap.read();ok=frame is not None
+        except ValueError:
+            ok=False;frame=None
+        finally:
+            cap.close()
         if not ok: frame=None
     if frame is None: raise SystemExit('Cannot load frame. Supply --image with a real classroom image.')
     h,w=frame.shape[:2]; scale=min(1,1200/w,800/h)

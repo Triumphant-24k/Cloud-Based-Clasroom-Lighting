@@ -42,7 +42,7 @@ def test_manual_auto_recovery():
  l.mode='AUTO';assert l.calculate({'FRONT_LEFT':True},80)['LIGHT_1']==100;assert l.calculate({},80)['LIGHT_2']==0
 
 def test_cloud_failure_and_recovery():
- c,z,m=load_config();cloud=CloudService(c,m);cloud.failure=True
+ c,z,m=load_config();c['cloud_mode']='LOCAL_DEMO';cloud=CloudService(c,m);cloud.failure=True
  metadata={'occupiedZones':{'BACK_RIGHT':True},'ambientLight':80}
  assert asyncio.run(cloud.decision(metadata))['LIGHT_6']==100;assert 'FALLBACK' in cloud.status
  cloud.failure=False;assert asyncio.run(cloud.decision(metadata))['LIGHT_6']==100;assert cloud.status=='SIMULATED CLOUD'
